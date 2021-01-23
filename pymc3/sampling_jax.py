@@ -121,6 +121,7 @@ def sample_numpyro_nuts(
     random_seed=10,
     model=None,
     progress_bar=True,
+    chain_method="parallel"
 ):
     from numpyro.infer import MCMC, NUTS
 
@@ -156,7 +157,7 @@ def sample_numpyro_nuts(
             num_samples=draws,
             num_chains=chains,
             postprocess_fn=None,
-            chain_method="parallel",
+            chain_method=chain_method,
             progress_bar=progress_bar,
         )
 
