@@ -5,6 +5,8 @@
 
 |Build Status| |Coverage| |NumFOCUS_badge| |Binder| |Dockerhub|
 
+Note: this fork is for allowing for better batch samplers on google colab which is currently running on python 3.6
+
 PyMC3 is a Python package for Bayesian statistical modeling and Probabilistic Machine Learning
 focusing on advanced Markov chain Monte Carlo (MCMC) and variational inference (VI)
 algorithms. Its flexibility and extensibility make it applicable to a
