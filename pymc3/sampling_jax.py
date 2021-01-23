@@ -53,7 +53,7 @@ def sample_tfp_nuts(
     init_state = [model.test_point[rv_name] for rv_name in rv_names]
     init_state_batched = jax.tree_map(lambda x: np.repeat(x[None, ...], chains, axis=0), init_state)
 
-    @jax.pmap
+    @jax.vmap
     def _sample(init_state, seed):
         def gen_kernel(step_size):
             hmc = tfp.mcmc.NoUTurnSampler(target_log_prob_fn=logp_fn_jax, step_size=step_size)
