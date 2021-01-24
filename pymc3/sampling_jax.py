@@ -95,7 +95,7 @@ def sample_tfp_nuts(
 
         return mcmc_samples, leapfrog_num
 
-    print("Compiling...")
+    print("Compiling and sampling...")
     tic2 = pd.Timestamp.now()
     map_seed = jax.random.split(seed, chains)
     mcmc_samples, leapfrog_num = _sample(init_state_batched, map_seed)
@@ -164,7 +164,7 @@ def sample_numpyro_nuts(
         leapfrogs_taken = pmap_numpyro.get_extra_fields(group_by_chain=True)["num_steps"]
         return samples, leapfrogs_taken
 
-    print("Compiling...")
+    print("Compiling and sampling...")
     tic2 = pd.Timestamp.now()
     map_seed = jax.random.split(seed, chains)
     mcmc_samples, leapfrogs_taken = _sample(init_state_batched, map_seed)
@@ -252,7 +252,7 @@ def sample_tfp_nuts_vmap(
 
         return mcmc_samples, leapfrog_num
 
-    print("Compiling...")
+    print("Compiling and sampling...")
     tic2 = pd.Timestamp.now()
     map_seed = jax.random.split(seed, chains)
     mcmc_samples, leapfrog_num = _sample(init_state_batched, map_seed)
@@ -323,7 +323,7 @@ def sample_numpyro_nuts_vmap(
         leapfrogs_taken = pmap_numpyro.get_extra_fields(group_by_chain=True)["num_steps"]
         return samples, leapfrogs_taken
 
-    print("Compiling...")
+    print("Compiling and sampling...")
     tic2 = pd.Timestamp.now()
     map_seed = jax.random.split(seed, chains)
     mcmc_samples, leapfrogs_taken = _sample(init_state_batched, map_seed)
