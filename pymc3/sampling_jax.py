@@ -27,7 +27,7 @@ warnings.warn("This module is experimental.")
 # theano.config.mode = "JAX"
 
 
-def sample_tfp_nuts(
+def sample_tfp_nuts_vmap(
     draws=1000,
     tune=1000,
     chains=4,
@@ -113,7 +113,7 @@ def sample_tfp_nuts(
     return az_trace  # , leapfrog_num, tic3 - tic2
 
 
-def sample_numpyro_nuts(
+def sample_numpyro_nuts_vmap(
     draws=1000,
     tune=1000,
     chains=4,
