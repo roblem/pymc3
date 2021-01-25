@@ -184,7 +184,7 @@ def sample_numpyro_nuts(
 #
 # Better batch versions
 #
-def sample_tfp_nuts_vmap(
+def sample_tfp_nuts_jit_vmap(
     draws=1000,
     tune=1000,
     chains=4,
@@ -210,12 +210,12 @@ def sample_tfp_nuts_vmap(
     init_state = [model.test_point[rv_name] for rv_name in rv_names]
     init_state_batched = jax.tree_map(lambda x: np.repeat(x[None, ...], chains, axis=0), init_state)
 
-    @jax.vmap
     def _sample(init_state, seed):
         def gen_kernel(step_size):
             hmc = tfp.mcmc.NoUTurnSampler(target_log_prob_fn=logp_fn_jax, step_size=step_size)
             return tfp.mcmc.DualAveragingStepSizeAdaptation(
-                hmc, tune // num_tuning_epoch, target_accept_prob=target_accept
+                hmc, jax.numpy.array(tune // num_tuning_epoch, dtype=jax.numpy.int32), 
+                target_accept_prob=target_accept
             )
 
         def trace_fn(_, pkr):
@@ -228,7 +228,7 @@ def sample_tfp_nuts_vmap(
         for i in range(num_tuning_epoch - 1):
             tuning_hmc = gen_kernel(step_size)
             init_samples, tuning_result, kernel_results = tfp.mcmc.sample_chain(
-                num_results=tune // num_tuning_epoch,
+                num_results=jax.numpy.array(tune // num_tuning_epoch, dtype=jax.numpy.int32),
                 current_state=init_state,
                 kernel=tuning_hmc,
                 trace_fn=trace_fn,
@@ -252,10 +252,12 @@ def sample_tfp_nuts_vmap(
 
         return mcmc_samples, leapfrog_num
 
+    _sample_jit_vmap = jax.jit(jax.vmap(_sample))
+
     print("Compiling and sampling...")
     tic2 = pd.Timestamp.now()
     map_seed = jax.random.split(seed, chains)
-    mcmc_samples, leapfrog_num = _sample(init_state_batched, map_seed)
+    mcmc_samples, leapfrog_num = _sample_jit_vmap(init_state_batched, map_seed)
 
     # map_seed = jax.random.split(seed, chains)
     # mcmc_samples = _sample(init_state_batched, map_seed)
