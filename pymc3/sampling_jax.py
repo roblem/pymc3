@@ -383,8 +383,9 @@ def sample_tfp_mhrw(
                 target_log_prob_fn=logp_fn_jax,
                 new_state_fn=tfp.mcmc.random_walk_normal_fn(scale=step_size))
             return kernel_
-
+        accept_rate = 0.
         for i in range(num_tuning_epoch):
+             print(f"Tuning step {i:2.0f} of {num_tuning_epoch:2.0f}.  Accept rate: {accept_rate:1.4f}")
              tuning_mhrw = gen_kernel(step_size)
              samples, stats = tfp.mcmc.sample_chain(num_results=burnin//num_tuning_epoch,
                                                    current_state=init_state,
