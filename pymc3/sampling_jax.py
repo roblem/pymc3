@@ -360,7 +360,7 @@ def sample_tfp_mhwr(
 
     seed = jax.random.PRNGKey(random_seed)
 
-    fgraph = theano.graph.fg.FunctionGraph(model.free_RVs, [model.logpt])
+    fgraph = theano.gof.FunctionGraph(model.free_RVs, [model.logpt])
     fns = jax_funcify(fgraph)
     logp_fn_jax = fns[0]
 
