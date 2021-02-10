@@ -387,7 +387,7 @@ def sample_tfp_mhrw(
         for i in range(num_tuning_epoch - 1):
              if i>0:
                   pdb.set_trace()
-             print(f"Tuning step {i+1:2.0f} of {num_tuning_epoch:2.0f}.  Accept rate: {accept_rate:1.4f}")
+             print(f"Tuning step {i+1:2.0f} of {num_tuning_epoch:2.0f}.  Accept rate: {jax.numpy.mean(accept_rate):1.4f}")
              tuning_mhrw = gen_kernel(step_size)
              samples, stats = tfp.mcmc.sample_chain(num_results=burnin//num_tuning_epoch,
                                                    current_state=init_state,
