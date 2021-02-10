@@ -337,3 +337,114 @@ def sample_numpyro_nuts(
     tic3 = pd.Timestamp.now()
     print("Compilation + sampling time = ", tic3 - tic2)
     return az_trace  # , leapfrogs_taken, tic3 - tic2
+
+##
+## This is for mhrw in tf
+##
+def sample_tfp_mhwr(
+    draws=1000,
+    tune=5000,
+    burnin=1000,
+    thin=0,
+    chains=4,
+    random_seed=10,
+    model=None,
+    num_tuning_epoch=5,
+    step_size = .1,
+):
+    import jax
+
+    from tensorflow_probability.substrates import jax as tfp
+
+    model = modelcontext(model)
+
+    seed = jax.random.PRNGKey(random_seed)
+
+    fgraph = theano.graph.fg.FunctionGraph(model.free_RVs, [model.logpt])
+    fns = jax_funcify(fgraph)
+    logp_fn_jax = fns[0]
+
+    rv_names = [rv.name for rv in model.free_RVs]
+    init_state = [model.test_point[rv_name] for rv_name in rv_names]
+    init_state_batched = jax.tree_map(lambda x: np.repeat(x[None, ...], chains, axis=0), init_state)
+
+    @jax.vmap
+    def _sample(init_state, seed, step_size):
+    
+        def trace_is_accepted(states, previous_kernel_results):
+            return previous_kernel_results.is_accepted
+
+        def gen_kernel(step_size):
+            kernel_ = tfp.mcmc.RandomWalkMetropolis(
+                target_log_prob_fn=logp_fn_jax,
+                new_state_fn=tfp.mcmc.random_walk_normal_fn(scale=step_size))
+            return kernel_
+
+        for i in range(num_tuning_epoch):
+             tuning_mhrw = gen_kernel(step_size)
+             samples, stats = tfp.mcmc.sample_chain(num_results=burnin//num_tuning_epoch,
+                                                   current_state=init_state,
+                                                   kernel = tuning_mhrw,
+                                                   num_burnin_steps=burnin,
+                                                   num_steps_between_results=thin,
+                                                   trace_fn = trace_is_accepted,
+                                                   seed=seed )
+             #pdb.set_trace()
+             accept_rate = jax.numpy.ravel(stats).mean()
+             step_size = vtune(step_size, accept_rate)
+
+        # Run inference
+        sample_kernel = gen_kernel(step_size)
+        mcmc_samples, mcmc_stats = tfp.mcmc.sample_chain(
+            num_results=draws,
+            num_burnin_steps=tune // num_tuning_epoch,
+            current_state=init_state,
+            kernel=sample_kernel,
+            trace_fn=trace_is_accepted,
+            seed=seed,
+        )
+        return mcmc_samples, mcmc_stats
+
+    print("Compiling and sampling...")
+    tic2 = pd.Timestamp.now()
+    #pdb.set_trace()
+    map_seed = jax.random.split(seed, chains)
+    map_stepsize = jax.tree_map(jax.numpy.ones, chains) 
+    
+    mcmc_samples, accept_rate = _sample(init_state_batched, map_seed, map_stepsize)
+
+    # map_seed = jax.random.split(seed, chains)
+    # mcmc_samples = _sample(init_state_batched, map_seed)
+    # tic4 = pd.Timestamp.now()
+    # print("Sampling time = ", tic4 - tic3)
+
+    posterior = {k: v for k, v in zip(rv_names, mcmc_samples)}
+
+    az_trace = az.from_dict(posterior=posterior)
+    tic3 = pd.Timestamp.now()
+    print("Compilation + sampling time = ", tic3 - tic2)
+    return az_trace 
+
+def vtune(scale, acc_rate):
+    """
+    This is a vectorized version of the pymc3 tune function
+    
+    Tunes the scaling parameter for the proposal distribution
+    according to the acceptance rate over the last tune_interval:
+    Rate    Variance adaptation
+    ----    -------------------
+    <0.001        x 0.1
+    <0.05         x 0.5
+    <0.2          x 0.9
+    >0.5          x 1.1
+    >0.75         x 2
+    >0.95         x 10
+    """
+    scale_ = (acc_rate < 0.001)*scale*0.1 +\
+            ((acc_rate >= 0.001) & (acc_rate < 0.05))*scale*.5 +\
+            ((acc_rate >= 0.05) & (acc_rate < 0.24))*scale * 0.9 +\
+            (acc_rate > 0.95)*scale * 10.0 +\
+            ((acc_rate <= 0.95) & (acc_rate > 0.75))*scale * 2.0 +\
+            ((acc_rate <= 0.75) & (acc_rate > 0.5))*scale*1.1 +\
+            ((acc_rate>=.24) & (acc_rate<=.5))*scale
+    return scale_
