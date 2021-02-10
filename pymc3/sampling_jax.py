@@ -2,6 +2,7 @@
 import os
 import re
 import warnings
+import pdb as pdb
 
 xla_flags = os.getenv("XLA_FLAGS", "").lstrip("--")
 xla_flags = re.sub(r"xla_force_host_platform_device_count=.+\s", "", xla_flags).split()
@@ -346,11 +347,14 @@ def sample_numpyro_nuts_vmap(
 ##
 def sample_tfp_mhwr(
     draws=1000,
-    tune=1000,
+    tune=5000,
+    burnin=1000,
+    thin=0,
     chains=4,
     random_seed=10,
     model=None,
-    num_tuning_epoch=2,
+    num_tuning_epoch=5,
+    step_size = .1,
 ):
     import jax
 
@@ -367,9 +371,9 @@ def sample_tfp_mhwr(
     rv_names = [rv.name for rv in model.free_RVs]
     init_state = [model.test_point[rv_name] for rv_name in rv_names]
     init_state_batched = jax.tree_map(lambda x: np.repeat(x[None, ...], chains, axis=0), init_state)
-    
-    @jax.pmap
-    def _sample(init_state, seed):
+
+    @jax.vmap
+    def _sample(init_state, seed, step_size):
     
         def trace_is_accepted(states, previous_kernel_results):
             return previous_kernel_results.is_accepted
@@ -379,17 +383,19 @@ def sample_tfp_mhwr(
                 target_log_prob_fn=logp_fn_jax,
                 new_state_fn=tfp.mcmc.random_walk_normal_fn(scale=step_size))
             return kernel_
-        
+
         for i in range(num_tuning_epoch):
              tuning_mhrw = gen_kernel(step_size)
-             samples, stats = tfp.mcmc.sample_chain(num_results=num_samples,
-                                                   current_state=init_vals,
+             samples, stats = tfp.mcmc.sample_chain(num_results=burnin//num_tuning_epoch,
+                                                   current_state=init_state,
                                                    kernel = tuning_mhrw,
                                                    num_burnin_steps=burnin,
                                                    num_steps_between_results=thin,
-                                                   trace_fn = trace_is_accepted)
-             accept_rate = stats.mean(axis=0)
-             step_size = tune(step_size, accept_rate)
+                                                   trace_fn = trace_is_accepted,
+                                                   seed=seed )
+             #pdb.set_trace()
+             accept_rate = jax.numpy.ravel(stats).mean()
+             step_size = vtune(step_size, accept_rate)
 
         # Run inference
         sample_kernel = gen_kernel(step_size)
@@ -401,12 +407,15 @@ def sample_tfp_mhwr(
             trace_fn=trace_is_accepted,
             seed=seed,
         )
-        return mcmc_samples, leapfrog_num
+        return mcmc_samples, mcmc_stats
 
     print("Compiling and sampling...")
     tic2 = pd.Timestamp.now()
+    #pdb.set_trace()
     map_seed = jax.random.split(seed, chains)
-    mcmc_samples, leapfrog_num = _sample(init_state_batched, map_seed)
+    map_stepsize = jax.tree_map(jax.numpy.ones, chains) 
+    
+    mcmc_samples, accept_rate = _sample(init_state_batched, map_seed, map_stepsize)
 
     # map_seed = jax.random.split(seed, chains)
     # mcmc_samples = _sample(init_state_batched, map_seed)
@@ -420,9 +429,9 @@ def sample_tfp_mhwr(
     print("Compilation + sampling time = ", tic3 - tic2)
     return az_trace 
 
-def tune(scale, acc_rate):
+def vtune(scale, acc_rate):
     """
-    This is a pymc3 function
+    This is a vectorized version of the pymc3 tune function
     
     Tunes the scaling parameter for the proposal distribution
     according to the acceptance rate over the last tune_interval:
@@ -435,23 +444,11 @@ def tune(scale, acc_rate):
     >0.75         x 2
     >0.95         x 10
     """
-    if acc_rate < 0.001:
-        # reduce by 90 percent
-        return scale * 0.1
-    elif acc_rate < 0.05:
-        # reduce by 50 percent
-        return scale * 0.5
-    elif acc_rate < 0.24:
-        # reduce by ten percent
-        return scale * 0.9
-    elif acc_rate > 0.95:
-        # increase by factor of ten
-        return scale * 10.0
-    elif acc_rate > 0.75:
-        # increase by double
-        return scale * 2.0
-    elif acc_rate > 0.5:
-        # increase by ten percent
-        return scale * 1.1
-
-    return scale
+    scale_ = (acc_rate < 0.001)*scale*0.1 +\
+            ((acc_rate >= 0.001) & (acc_rate < 0.05))*scale*.5 +\
+            ((acc_rate >= 0.05) & (acc_rate < 0.24))*scale * 0.9 +\
+            (acc_rate > 0.95)*scale * 10.0 +\
+            ((acc_rate <= 0.95) & (acc_rate > 0.75))*scale * 2.0 +\
+            ((acc_rate <= 0.75) & (acc_rate > 0.5))*scale*1.1 +\
+            ((acc_rate>=.24) & (acc_rate<=.5))*scale
+    return scale_
