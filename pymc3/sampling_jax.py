@@ -341,7 +341,7 @@ def sample_numpyro_nuts(
 ##
 ## This is for mhrw in tf
 ##
-def sample_tfp_mhwr(
+def sample_tfp_mhrw(
     draws=1000,
     tune=5000,
     burnin=1000,
