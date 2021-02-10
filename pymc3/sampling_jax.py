@@ -361,7 +361,7 @@ def sample_tfp_mhwr(
     seed = jax.random.PRNGKey(random_seed)
 
     fgraph = theano.gof.FunctionGraph(model.free_RVs, [model.logpt])
-    fns = jax_funcify(fgraph)
+    fns = theano.sandbox.jaxify.jax_funcify(fgraph)
     logp_fn_jax = fns[0]
 
     rv_names = [rv.name for rv in model.free_RVs]
