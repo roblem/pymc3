@@ -27,7 +27,6 @@ warnings.warn("This module is experimental.")
 # This will make the JAX Linker the default
 # theano.config.mode = "JAX"
 
-
 def sample_tfp_nuts(
     draws=1000,
     tune=1000,
@@ -385,8 +384,8 @@ def sample_tfp_mhrw(
             return kernel_
         accept_rate = 0.
         for i in range(num_tuning_epoch - 1):
-             print(accept_rate)
-             print(step_size)
+             print(jax.numpy.mean(accept_rate))
+             print(jax.numpy.std(step_size))
              #print(f"Tuning step {i+1:2.0f} of {num_tuning_epoch:2.0f}.  Accept rate: {jax.numpy.mean(accept_rate):1.4f}")
              tuning_mhrw = gen_kernel(step_size)
              samples, stats = tfp.mcmc.sample_chain(num_results=burnin//num_tuning_epoch,
@@ -430,7 +429,7 @@ def sample_tfp_mhrw(
     az_trace = az.from_dict(posterior=posterior)
     tic3 = pd.Timestamp.now()
     print("Compilation + sampling time = ", tic3 - tic2)
-    return az_trace 
+    return az_trace, accept_rate
 
 def vtune(scale, acc_rate):
     """
